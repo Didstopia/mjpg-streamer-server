@@ -1,5 +1,18 @@
 FROM ubuntu:20.04
 
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg-agent \
+    software-properties-common \
+    cmake \
+    libjpeg8-dev \
+    gcc \
+    g++ \
+    make
+
 # Download and install mjpg-streamer
 RUN curl -fsSLO --compressed --retry 3 --retry-delay 10 \
     https://github.com/jacksonliam/mjpg-streamer/archive/master.tar.gz \
