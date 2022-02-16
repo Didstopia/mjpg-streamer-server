@@ -1,0 +1,9 @@
+services:
+  mjpg-streamer-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    privileged: true
+    ports:
+      - "8080:80"
+      - "8081:8080"

@@ -1,3 +1,6 @@
+## TODO: Create a builder for the Go project and copy it to the final image.
+
+
 FROM ubuntu:20.04
 
 # Install dependencies
@@ -26,6 +29,10 @@ RUN make install
 ENV MJPG_STREAMER_INPUT "input_uvc.so"
 ENV MJPG_STREAMER_PORT "8080"
 ENV MJPG_STREAMER_CAMERA_DEVICE "/dev/video0"
+
+# Expose the default ports
+EXPOSE 80
+EXPOSE 8080
 
 # Setup the main entrypoint script
 COPY entry.sh /entry
