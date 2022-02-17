@@ -27,8 +27,8 @@ import (
 
 // Options for the idle proxy
 type Options struct {
-	Port        string        `long:"port" description:"Port to listen on" default:"80"`
-	IdleTimer   time.Duration `long:"idle-timer" description:"Idle timer interval" default:"1s"`
+	Port string `long:"port" description:"Port to listen on" default:"80"`
+	// IdleTimer   time.Duration `long:"idle-timer" description:"Idle timer interval" default:"1s"`
 	IdleTimeout time.Duration `long:"idle-timeout" description:"Idle connection timeout" default:"1m"`
 	Debug       bool          `long:"debug" description:"Enable debug mode"`
 }
@@ -42,8 +42,8 @@ var (
 	connectionWatcher conwatch.ConnectionWatcher
 	connectionCount   int
 	// connectionState   http.ConnState
-	idleTimer *time.Timer
-	process   *daemon.Daemon
+	// idleTimer *time.Timer
+	process *daemon.Daemon
 )
 
 func loadOptions() {
@@ -51,11 +51,11 @@ func loadOptions() {
 
 	options.Port = getEnv("PORT", "80")
 
-	idleTimerDuration, err := time.ParseDuration(getEnv("IDLE_TIMER", "1s"))
-	if err != nil {
-		log.Fatalf("Invalid idle timer: %s", err)
-	}
-	options.IdleTimer = idleTimerDuration
+	// idleTimerDuration, err := time.ParseDuration(getEnv("IDLE_TIMER", "1s"))
+	// if err != nil {
+	// 	log.Fatalf("Invalid idle timer: %s", err)
+	// }
+	// options.IdleTimer = idleTimerDuration
 
 	idleTimeoutDuration, err := time.ParseDuration(getEnv("IDLE_TIMEOUT", "1m"))
 	if err != nil {
@@ -109,7 +109,7 @@ func setupProxy(ctx context.Context) {
 		// IdleTimeout: 30 * time.Second,
 		// ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Println("Idle timeout:", proxy.IdleTimeout)
+	// log.Println("Idle timeout:", proxy.IdleTimeout)
 
 	go func() {
 		if err := proxy.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -129,8 +129,25 @@ func proxyHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func getProxyURL() string {
-	// FIXME: Ensure that the URL exists and is valid/responsive, otherwise exit? Or at least log an error?
-	return "http://localhost:" + os.Getenv("MJPG_STREAMER_PORT")
+	// FIXME: Use a more generic env var name, such as "server port", also "proxy port" instead of just "port"?
+	url := "http://localhost:" + getEnv("MJPG_STREAMER_PORT", "8080")
+
+	// Query the URL to confirm it's up
+	for {
+		// response, responseErr := http.Head(url)
+		_, responseErr := http.Head(url)
+		if responseErr != nil {
+			log.Println("Error response from proxy url:", responseErr)
+		} else {
+			return url
+			// _, responseBodyErr := ioutil.ReadAll(response.Body)
+			// if responseBodyErr != nil {
+			// 	log.Println("Error reading response body:", responseBodyErr)
+			// } else {
+			// 	return url
+			// }
+		}
+	}
 }
 
 func logRequest(proxyURL string, req *http.Request) {
@@ -164,13 +181,14 @@ func setupDaemon(ctx context.Context) {
 }
 
 func setupIdleTimer(ctx context.Context) {
-	idleTimer = time.NewTimer(options.IdleTimer)
+	// idleTimer = time.NewTimer(options.IdleTimer)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-idleTimer.C:
+		// case <-idleTimer.C:
+		default:
 			newConnectionCount := connectionWatcher.Count()
 			if newConnectionCount != connectionCount {
 				if options.Debug {
@@ -203,7 +221,7 @@ func setupIdleTimer(ctx context.Context) {
 				}
 			}
 
-			idleTimer.Reset(options.IdleTimer)
+			// idleTimer.Reset(options.IdleTimer)
 		}
 	}
 }
@@ -223,8 +241,8 @@ func shutdown(ctx context.Context, ctxCancel context.CancelFunc) {
 	// all active connections, to avoid waiting indefinitely
 	ctxCancel()
 
-	log.Println("Shutting down idle timer...")
-	idleTimer.Stop()
+	// log.Println("Shutting down idle timer...")
+	// idleTimer.Stop()
 
 	log.Println("Shutting down daemon...")
 	if err := process.Stop(); err != nil {
