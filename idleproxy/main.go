@@ -137,7 +137,9 @@ func getProxyURL() string {
 	// FIXME: The idle timer should be handling the process startup, right?
 	// Sleep for a bit to give the process time to start up
 	if process.Status != daemon.Running {
-		time.Sleep(time.Second * 1)
+		// FIXME: This might cause issues with Octolapse, since it uses snapshots?
+		//        Maybe if we just increase the idle timeout to several minutes?
+		time.Sleep(time.Second * 150)
 	}
 
 	// Query the URL to confirm it's up
@@ -148,7 +150,7 @@ func getProxyURL() string {
 
 			// FIXME: This should fail eventually, but for now, just wait a bit and try again
 			// Sleep for a bit and try again
-			time.Sleep(time.Second * 1)
+			time.Sleep(time.Millisecond * 250)
 		} else {
 			return url
 		}
