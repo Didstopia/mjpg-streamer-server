@@ -79,9 +79,9 @@ func main() {
 	defer shutdown(ctx, ctxCancel)
 
 	loadOptions()
+	setupProxy(ctx)
+	setupDaemon(ctx)
 
-	go setupProxy(ctx)
-	go setupDaemon(ctx)
 	go setupIdleTimer(ctx)
 
 	exit := make(chan os.Signal, 1)
@@ -223,6 +223,9 @@ func setupIdleTimer(ctx context.Context) {
 
 			// idleTimer.Reset(options.IdleTimer)
 		}
+
+		// Sleep for a bit to reduce CPU usage
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
