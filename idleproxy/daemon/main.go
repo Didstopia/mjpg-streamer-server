@@ -106,11 +106,24 @@ func handleOutput(d *Daemon, cmdReader io.ReadCloser) {
 			log.Println("Context done, stopping daemon output handler")
 			return
 		default:
-			for scanner.Scan() {
-				log.Println(scanner.Text())
+			// Bail out if the process is not running
+			if d.Status == Stopped {
+				log.Println("Stopping daemon output handler, daemon is stopped")
+				return
 			}
-			if err := scanner.Err(); err != nil {
-				log.Println("Error reading daemon output:", err)
+
+			// Print the process output as long as it is running
+			if d.Status == Running {
+				for scanner.Scan() {
+					log.Println(scanner.Text())
+				}
+
+				// If the process is not running, stop the handler
+				if err := scanner.Err(); err != nil {
+					log.Println("Error reading daemon output:", err)
+					d.Stop()
+					return
+				}
 			}
 		}
 	}
