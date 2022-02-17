@@ -132,20 +132,25 @@ func getProxyURL() string {
 	// FIXME: Use a more generic env var name, such as "server port", also "proxy port" instead of just "port"?
 	url := "http://localhost:" + getEnv("MJPG_STREAMER_PORT", "8080")
 
+	// TODO: I wonder if we should always try to start the process here,
+	//       but also how would that work in tandem with the idle timer?
+	// FIXME: The idle timer should be handling the process startup, right?
+	// Sleep for a bit to give the process time to start up
+	if process.Status != daemon.Running {
+		time.Sleep(time.Second * 1)
+	}
+
 	// Query the URL to confirm it's up
 	for {
-		// response, responseErr := http.Head(url)
-		_, responseErr := http.Head(url)
-		if responseErr != nil {
-			log.Println("Error response from proxy url:", responseErr)
+		_, err := http.Head(url)
+		if err != nil {
+			log.Println("Error response from proxy url:", err)
+
+			// FIXME: This should fail eventually, but for now, just wait a bit and try again
+			// Sleep for a bit and try again
+			time.Sleep(time.Second * 1)
 		} else {
 			return url
-			// _, responseBodyErr := ioutil.ReadAll(response.Body)
-			// if responseBodyErr != nil {
-			// 	log.Println("Error reading response body:", responseBodyErr)
-			// } else {
-			// 	return url
-			// }
 		}
 	}
 }
