@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"didstopia/jpg-streamer-server/idleproxy/conwatch"
+	"didstopia/jpg-streamer-server/idleproxy/daemon"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -19,27 +21,67 @@ import (
 // https://www.alexedwards.net/blog/an-introduction-to-handlers-and-servemuxes-in-go
 // https://medium.com/honestbee-tw-engineer/gracefully-shutdown-in-go-http-server-5f5e6b83da5a
 
-const PORT = "80"
-const IDLE_TIMER = 1
-const DEBUG = true
+// const PORT = "80"
+// const IDLE_TIMER = getEnv("IDLE_TIMER", "1")
+// const DEBUG = true
+
+// Options for the idle proxy
+type Options struct {
+	Port        string        `long:"port" description:"Port to listen on" default:"80"`
+	IdleTimer   time.Duration `long:"idle-timer" description:"Idle timer interval" default:"1s"`
+	IdleTimeout time.Duration `long:"idle-timeout" description:"Idle connection timeout" default:"1m"`
+	Debug       bool          `long:"debug" description:"Enable debug mode"`
+}
 
 var (
+	options Options
 	// ctx       context.Context
 	// ctxCancel context.CancelFunc
 	proxy             *http.Server
 	router            *http.ServeMux
 	connectionWatcher conwatch.ConnectionWatcher
 	connectionCount   int
-	connectionState   http.ConnState
-	idleTimer         = time.NewTimer(time.Second * IDLE_TIMER)
+	// connectionState   http.ConnState
+	idleTimer *time.Timer
+	process   *daemon.Daemon
 )
+
+func loadOptions() {
+	options = Options{}
+
+	options.Port = getEnv("PORT", "80")
+
+	idleTimerDuration, err := time.ParseDuration(getEnv("IDLE_TIMER", "1s"))
+	if err != nil {
+		log.Fatalf("Invalid idle timer: %s", err)
+	}
+	options.IdleTimer = idleTimerDuration
+
+	idleTimeoutDuration, err := time.ParseDuration(getEnv("IDLE_TIMEOUT", "1m"))
+	if err != nil {
+		log.Fatalf("Invalid idle timeout: %s", err)
+	}
+	options.IdleTimeout = idleTimeoutDuration
+	// FIXME: Remove this after moving to env vars etc.
+	options.IdleTimeout = time.Second * 15
+
+	options.Debug = strings.ToLower(getEnv("DEBUG", "false")) == "true"
+	// FIXME: Remove this after moving to env vars etc.
+	options.Debug = true
+	if options.Debug {
+		log.Printf("Options: %+v", options)
+	}
+}
 
 func main() {
 	ctx, ctxCancel := context.WithCancel(context.Background())
-	defer ctxCancel()
-	defer shutdown(ctx)
+	// defer ctxCancel()
+	defer shutdown(ctx, ctxCancel)
+
+	loadOptions()
 
 	go setupProxy(ctx)
+	go setupDaemon(ctx)
 	go setupIdleTimer(ctx)
 
 	exit := make(chan os.Signal, 1)
@@ -54,18 +96,20 @@ func setupProxy(ctx context.Context) {
 	router.HandleFunc("/", proxyHandler)
 
 	proxy = &http.Server{
-		Addr:      ":" + PORT,
+		Addr:      ":" + options.Port,
 		ConnState: connectionWatcher.OnStateChange,
 		Handler:   router,
 
 		// FIXME: It looks like actively watching the stream is somehow considered idle?!
 
 		// TODO: Allow timeouts to be configurable via env vars
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second, // TODO: Increase this to 15, 30 or 60 minutes, also test that Octolapse etc. does NOT go idle!
-		ReadHeaderTimeout: 10 * time.Second,
+		// ReadTimeout:       10 * time.Second,
+		// WriteTimeout:      10 * time.Second,
+		IdleTimeout: options.IdleTimeout,
+		// IdleTimeout: 30 * time.Second,
+		// ReadHeaderTimeout: 10 * time.Second,
 	}
+	log.Println("Idle timeout:", proxy.IdleTimeout)
 
 	go func() {
 		if err := proxy.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -73,21 +117,19 @@ func setupProxy(ctx context.Context) {
 		}
 	}()
 
-	log.Print("Proxy started on port ", PORT)
+	log.Print("Proxy started on port ", options.Port)
 }
 
 func proxyHandler(res http.ResponseWriter, req *http.Request) {
 	url := getProxyURL()
-	if DEBUG {
+	if options.Debug {
 		logRequest(url, req)
 	}
 	serveReverseProxy(url, res, req)
 }
 
 func getProxyURL() string {
-	if DEBUG {
-		return "http://192.168.0.4:38080"
-	}
+	// FIXME: Ensure that the URL exists and is valid/responsive, otherwise exit? Or at least log an error?
 	return "http://localhost:" + os.Getenv("MJPG_STREAMER_PORT")
 }
 
@@ -96,6 +138,10 @@ func logRequest(proxyURL string, req *http.Request) {
 }
 
 func serveReverseProxy(target string, res http.ResponseWriter, req *http.Request) {
+	// FIXME: Always wait for the proxy target URL to be available,
+	//        before responding to the incoming request, as this will
+	//        give the daemon time to start up.
+
 	url, _ := url.Parse(target)
 	proxy := httputil.NewSingleHostReverseProxy(url)
 	proxy.ServeHTTP(res, req)
@@ -103,7 +149,23 @@ func serveReverseProxy(target string, res http.ResponseWriter, req *http.Request
 	// TODO: How can we detect when there are no active connections?
 }
 
+func setupDaemon(ctx context.Context) {
+	log.Print("Setting up daemon...")
+
+	process = &daemon.Daemon{
+		Context: ctx,
+		Cwd:     "/mjpg/mjpg-streamer-master/mjpg-streamer-experimental",
+		Cmd:     "/entry",
+	}
+
+	if err := process.Start(); err != nil {
+		log.Fatalf("Error starting daemon: %s", err)
+	}
+}
+
 func setupIdleTimer(ctx context.Context) {
+	idleTimer = time.NewTimer(options.IdleTimer)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -111,39 +173,74 @@ func setupIdleTimer(ctx context.Context) {
 		case <-idleTimer.C:
 			newConnectionCount := connectionWatcher.Count()
 			if newConnectionCount != connectionCount {
-				if DEBUG {
+				if options.Debug {
 					log.Printf("Connection count changed from %d to %d\n", connectionCount, newConnectionCount)
 				}
 				connectionCount = newConnectionCount
 			}
 
-			// FIXME: This is dumb, we should just use a DEBUG env var and log to stdout in conwatch directly!
-			newConnectionState := connectionWatcher.State()
-			if newConnectionState != connectionState {
-				if DEBUG {
-					log.Printf("Connection state changed from %s to %s\n", connectionState, newConnectionState)
+			// Ensure the daemon is stopped if there are no active connections
+			if newConnectionCount == 0 {
+				if process.Status == daemon.Running {
+					if options.Debug {
+						log.Print("No active connections and daemon is running, stopping...")
+					}
+					if err := process.Stop(); err != nil {
+						log.Fatalf("Error stopping daemon: %s", err)
+					}
 				}
-				connectionState = newConnectionState
 			}
 
-			// TODO: If connection count > 0, make sure the mjpg-streamer server is running
-			// TODO: If connection count == 0, stop the mjpg-streamer server
-			// TODO: When starting or stopping the mjpg-streamer server, be sure
-			//       to keep in mind that the server may take a while to spin up/down!
+			// Ensure the daemon is running if there are active connections
+			if newConnectionCount > 0 {
+				if process.Status == daemon.Stopped {
+					if options.Debug {
+						log.Print("Active connections detected and daemon is not running, starting...")
+					}
+					if err := process.Start(); err != nil {
+						log.Fatalf("Error starting daemon: %s", err)
+					}
+				}
+			}
 
-			idleTimer.Reset(time.Second * IDLE_TIMER)
+			idleTimer.Reset(options.IdleTimer)
 		}
 	}
 }
 
-func shutdown(ctx context.Context) {
-	// TODO: Stop the timer
-	// TODO: Gracefully shutdown the http server and active connections
-	log.Println("Shutting down...")
-	idleTimer.Stop()
-	if err := proxy.Shutdown(ctx); err != nil {
-		log.Fatalf("Proxy Shutdown Failed:%+v", err)
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok && len(value) > 0 {
+		return value
 	}
-	log.Println("Shutdown complete")
-	os.Exit(0)
+	return fallback
+}
+
+func shutdown(ctx context.Context, ctxCancel context.CancelFunc) {
+	log.Println("Shutting down...")
+	exitCode := 0
+
+	// Cancel the context, forcing eg. the HTTP proxy to shutdown
+	// all active connections, to avoid waiting indefinitely
+	ctxCancel()
+
+	log.Println("Shutting down idle timer...")
+	idleTimer.Stop()
+
+	log.Println("Shutting down daemon...")
+	if err := process.Stop(); err != nil {
+		log.Println("Error stopping daemon:", err)
+		exitCode = 1
+	}
+
+	log.Println("Shutting down proxy...")
+	if err := proxy.Shutdown(ctx); err != nil {
+		// Ignore context cancellation errors
+		if err.Error() != "context canceled" {
+			log.Println("Error stopping proxy:", err)
+			exitCode = 1
+		}
+	}
+
+	log.Println("Terminating with exit code", exitCode)
+	os.Exit(exitCode)
 }

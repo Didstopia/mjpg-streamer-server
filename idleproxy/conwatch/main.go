@@ -8,7 +8,7 @@ import (
 
 type ConnectionWatcher struct {
 	n int64
-	s http.ConnState
+	// s http.ConnState
 }
 
 // OnStateChange records open connections in response to connection
@@ -16,7 +16,7 @@ type ConnectionWatcher struct {
 // as value.
 func (cw *ConnectionWatcher) OnStateChange(conn net.Conn, state http.ConnState) {
 	// log.Println("State changed:", state)
-	cw.s = state
+	// cw.s = state
 	switch state {
 	case http.StateNew:
 		cw.Add(1)
@@ -37,6 +37,6 @@ func (cw *ConnectionWatcher) Add(c int64) {
 }
 
 // State returns the current connection state.
-func (cw *ConnectionWatcher) State() http.ConnState {
-	return cw.s
-}
+// func (cw *ConnectionWatcher) State() http.ConnState {
+// 	return cw.s
+// }

@@ -1,6 +1,19 @@
-## TODO: Create a builder for the Go project and copy it to the final image.
+# Compiler image
+FROM golang:1.17-bullseye AS go-builder
+
+# Copy the project 
+COPY idleproxy/ /tmp/idleproxy/
+WORKDIR /tmp/idleproxy/
+
+# Install dependencies
+RUN go mod download
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o /go/bin/idleproxy
 
 
+
+# Final image
 FROM ubuntu:20.04
 
 # Install dependencies
@@ -25,6 +38,9 @@ WORKDIR /mjpg/mjpg-streamer-master/mjpg-streamer-experimental
 RUN make
 RUN make install
 
+# Copy the idleproxy binary
+COPY --from=go-builder /go/bin/idleproxy /go/bin/idleproxy
+
 # Set default environment variables
 ENV MJPG_STREAMER_INPUT "input_uvc.so"
 ENV MJPG_STREAMER_PORT "8080"
@@ -37,4 +53,7 @@ EXPOSE 8080
 # Setup the main entrypoint script
 COPY entry.sh /entry
 RUN chmod +x /entry
-ENTRYPOINT [ "/entry" ]
+# ENTRYPOINT [ "/entry" ]
+
+# Run idleproxy as the main entrypoint
+ENTRYPOINT ["/go/bin/idleproxy"]
