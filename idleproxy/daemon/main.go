@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"time"
 )
 
 // Status enum type for running or stopped process
@@ -48,8 +47,11 @@ func NewDaemon(cwd, cmd string) *Daemon {
 func (d *Daemon) Start() error {
 	log.Println("Starting daemon")
 
+	// FIXME: This doesn't work, because d.cmd.ProcessState is ALWAYS nil for some reason..
 	// Ensure the process is stopped
-	if d.GetStatus() != Stopped {
+	// if !d.Exited() {
+	// if !d.cmd.ProcessState.Exited() {
+	if d.Status != Stopped {
 		return errors.New("unable to start daemon, already running")
 	}
 
@@ -73,70 +75,143 @@ func (d *Daemon) Start() error {
 		return err
 	}
 
+	// FIXME: This doesn't work, because d.cmd.ProcessState is ALWAYS nil for some reason..
 	// Ensure the process is started
-	for d.GetStatus() != Running {
-		log.Println("Waiting for daemon to start")
-		time.Sleep(time.Second)
-	}
+	// for d.Exited() {
+	// for d.cmd.ProcessState.Exited() {
+	// for d.Status != Running {
+	// 	log.Println("Waiting for daemon to start, current status:", d.Status)
+	// 	time.Sleep(time.Second)
+	// }
 
 	d.Status = Running
 	return nil
 }
 
+// func (d *Daemon) Exited() bool {
+// 	if d.cmd == nil {
+// 		log.Println("Daemon command is nil")
+// 	} else {
+// 		if d.cmd.Process == nil {
+// 			log.Println("Daemon command process is nil")
+// 		}
+// 		if d.cmd.ProcessState == nil {
+// 			log.Println("Daemon command process state is nil")
+// 			// FIXME: What if we just return true here?
+// 			return true
+// 			// if d.cmd.Process != nil {
+// 			// 	log.Println("Daemon command process is running with pid", d.cmd.Process.Pid)
+// 			// 	return false // FIXME: Why is the process state nil, but the process is still running?!
+// 			// }
+// 		}
+// 	}
+
+// 	if d.cmd != nil && d.cmd.ProcessState != nil {
+// 		log.Println("Daemon exited with status:", d.cmd.ProcessState.String(), "and exit bool:", d.cmd.ProcessState.Exited(), "and success bool:", d.cmd.ProcessState.Success())
+// 		return d.cmd.ProcessState.Exited() || d.cmd.ProcessState.Success()
+// 	}
+
+// 	log.Println("Returning true for exited")
+// 	return true
+// }
+
 func (d *Daemon) Stop() error {
 	log.Println("Stopping daemon")
 
-	if d.GetStatus() == Stopped {
+	// FIXME: This doesn't work, because d.cmd.ProcessState is ALWAYS nil for some reason..
+	// Ensure the process is running
+	// if d.Exited() {
+	// if d.cmd.ProcessState.Exited() {
+	if d.Status == Stopped {
 		return errors.New("unable to stop daemon, already stopped")
 	}
 
-	// TODO: Somehow gracefully shutdown or kill the command/process
+	// Kill the process
 	// if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
 	if err := d.cmd.Process.Kill(); err != nil {
 		log.Println("Error stopping daemon:", err)
 		return err
 	}
+
+	// TODO: Should this be done before or after waiting for the command to finish?
+	// Wait for the actual process to exit
+	processState, err := d.cmd.Process.Wait()
+	if err != nil {
+		log.Println("Error waiting for daemon to stop:", err)
+		return err
+	}
+	log.Println("Daemon process exited with state:", processState.String())
+
+	// Wait for the command itself to finish
 	if err := d.cmd.Wait(); err != nil {
+		// FIXME: Error waiting for daemon to stop: waitid: no child processes
+		// TODO: Maybe just ignore that error?
 		// Ignore the error if the process was killed
-		if err.Error() != "signal: killed" {
-			log.Println("Error waiting for daemon to stop:", err)
+		if err.Error() != "signal: killed" && err.Error() != "waitid: no child processes" {
+			log.Println("Error waiting for daemon to stop:", err.Error())
 			return err
 		}
 	}
 
-	// Ensure the process is stopped
-	for d.GetStatus() != Stopped {
-		log.Println("Waiting for daemon to stop")
-		time.Sleep(time.Second)
+	// TODO: Is this useless?
+	if d.cmd.ProcessState != nil {
+		log.Println("Daemon stopped with status:", d.cmd.ProcessState.String())
+		// TODO: Check state and call process wait to wait for it to be killed?
 	}
+
+	// FIXME: We need to somehow be able to CONFIRM that the process has stopped..
+
+	// FIXME: This doesn't work, because d.cmd.ProcessState is ALWAYS nil for some reason..
+	// Ensure the process is stopped
+	// for !d.Exited() {
+	// for !d.cmd.ProcessState.Exited() {
+	// for d.Status != Stopped {
+	// 	log.Println("Waiting for daemon to stop, current status:", d.Status)
+	// 	time.Sleep(time.Second)
+	// }
 
 	d.Status = Stopped
 	return nil
 }
 
-func (d *Daemon) GetStatus() Status {
-	log.Println("Getting daemon status")
-	if (d.cmd == nil) || (d.cmd.Process == nil) {
-		log.Println("Daemon or process is not running")
-		return Stopped
-	}
-	daemonProcess, err := os.FindProcess(d.cmd.Process.Pid)
-	if err != nil {
-		log.Println("Error finding daemon process:", err)
-		return Stopped
-	}
-	if daemonProcess == nil {
-		log.Println("Daemon process is nil")
-		return Stopped
-	}
-	if d.Status == Stopped {
-		log.Println("Daemon status is stopped but process is running")
-
-		// TODO: We need to somehow wait here until the process is stopped?!
-	}
-	log.Println("Daemon process is running, returning current status", d.Status)
-	return d.Status
+func (d *Daemon) GetProcess() *os.Process {
+	return d.cmd.Process
 }
+
+// func (d *Daemon) GetStatus() Status {
+// 	log.Println("Getting daemon status")
+
+// 	if (d.cmd == nil) || (d.cmd.Process == nil) {
+// 		log.Println("Daemon or process is not running")
+// 		return Stopped
+// 	}
+
+// 	log.Println("Checking if process is running with pid", d.cmd.Process.Pid)
+// 	daemonProcess, err := os.FindProcess(d.cmd.Process.Pid)
+// 	if err != nil {
+// 		log.Fatal("Error finding daemon process:", err)
+// 	}
+// 	if daemonProcess == nil {
+// 		log.Fatal("Daemon process was nil")
+// 	}
+
+// 	if d.Status == Stopped {
+// 		// TODO: Are we sure the process is running? Because I don't think it is anymore..
+// 		log.Println("Daemon status is stopped but process is running")
+// 		state, err := daemonProcess.Wait()
+// 		if err != nil {
+// 			log.Fatal("Error waiting for daemon process:", err)
+// 		}
+// 		log.Println("Daemon process exited with status:", state.String())
+
+// 		// TODO: We need to somehow wait here until the process is stopped?!
+// 	}
+
+// 	// log.Println("Daemon process is running, returning current status", d.Status)
+// 	// return d.Status
+// 	log.Println("Daemon process is running")
+// 	return Running
+// }
 
 func (s Status) String() string {
 	switch s {

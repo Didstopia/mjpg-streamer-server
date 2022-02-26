@@ -134,26 +134,33 @@ func getProxyURL() string {
 	if process.Status != daemon.Running {
 		// FIXME: This might cause issues with Octolapse, since it uses snapshots?
 		//        Maybe if we just increase the idle timeout to several minutes?
+		log.Println("Daemon is not running, sleeping for a bit before checking again...")
 		time.Sleep(time.Millisecond * 250)
 	}
 
 	// Query the URL to confirm it's up
 	for {
+		// Set default HTTP client timeout to 1 second
+		http.DefaultClient.Timeout = time.Second * 1
 		_, err := http.Head(url)
 		if err != nil {
 			log.Println("Error response from proxy url:", err)
 
 			// FIXME: This should fail eventually, but for now, just wait a bit and try again
 			// Sleep for a bit and try again
+			log.Println("Daemon is not responding, sleeping for a bit before checking again...")
 			time.Sleep(time.Millisecond * 250)
 		} else {
+			// log.Println("Proxy url is up!")
 			return url
 		}
 	}
 }
 
 func logRequest(proxyURL string, req *http.Request) {
-	log.Printf("%s%s\n", proxyURL, req.URL.String())
+	if options.Debug {
+		log.Printf("[PROXY]: %s%s\n", proxyURL, req.URL.String())
+	}
 }
 
 func serveReverseProxy(target string, res http.ResponseWriter, req *http.Request) {
