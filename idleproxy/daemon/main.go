@@ -129,8 +129,11 @@ func (d *Daemon) Stop() error {
 	// Kill the process
 	// if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
 	if err := d.cmd.Process.Kill(); err != nil {
-		log.Println("Error stopping daemon:", err)
-		return err
+		// Ignore the error if the process is already dead
+		if err.Error() != "os: process already finished" {
+			log.Println("Error stopping daemon:", err)
+			return err
+		}
 	}
 
 	// TODO: Should this be done before or after waiting for the command to finish?
@@ -251,8 +254,12 @@ func handleOutput(d *Daemon, cmdReader io.ReadCloser) {
 
 				// If the process is not running, stop the handler
 				if err := scanner.Err(); err != nil {
-					log.Println("Error reading daemon output:", err)
-					d.Stop()
+					// Ignore the error if the process is already dead
+					if err.Error() != "read |0: file already closed" {
+						log.Println("Error reading daemon output:", err)
+						d.Stop()
+					}
+					log.Println("Stopping daemon output handler, daemon is stopped")
 					return
 				}
 			}
