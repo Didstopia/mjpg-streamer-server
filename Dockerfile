@@ -43,6 +43,7 @@ COPY --from=go-builder /go/bin/idleproxy /go/bin/idleproxy
 
 # Set default environment variables
 ENV MJPG_STREAMER_INPUT "input_uvc.so"
+ENV MJPG_STREAMER_HOST "http://localhost"
 ENV MJPG_STREAMER_PORT "8080"
 ENV MJPG_STREAMER_CAMERA_DEVICE "/dev/video0"
 

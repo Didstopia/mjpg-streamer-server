@@ -6,7 +6,9 @@ import (
 	"errors"
 	"io"
 	"log"
+	"os"
 	"os/exec"
+	"time"
 )
 
 // Status enum type for running or stopped process
@@ -44,7 +46,10 @@ func NewDaemon(cwd, cmd string) *Daemon {
 }
 
 func (d *Daemon) Start() error {
-	if d.Status != Stopped {
+	log.Println("Starting daemon")
+
+	// Ensure the process is stopped
+	if d.GetStatus() != Stopped {
 		return errors.New("unable to start daemon, already running")
 	}
 
@@ -68,12 +73,20 @@ func (d *Daemon) Start() error {
 		return err
 	}
 
+	// Ensure the process is started
+	for d.GetStatus() != Running {
+		log.Println("Waiting for daemon to start")
+		time.Sleep(time.Second)
+	}
+
 	d.Status = Running
 	return nil
 }
 
 func (d *Daemon) Stop() error {
-	if d.Status == Stopped {
+	log.Println("Stopping daemon")
+
+	if d.GetStatus() == Stopped {
 		return errors.New("unable to stop daemon, already stopped")
 	}
 
@@ -91,8 +104,51 @@ func (d *Daemon) Stop() error {
 		}
 	}
 
+	// Ensure the process is stopped
+	for d.GetStatus() != Stopped {
+		log.Println("Waiting for daemon to stop")
+		time.Sleep(time.Second)
+	}
+
 	d.Status = Stopped
 	return nil
+}
+
+func (d *Daemon) GetStatus() Status {
+	log.Println("Getting daemon status")
+	if (d.cmd == nil) || (d.cmd.Process == nil) {
+		log.Println("Daemon or process is not running")
+		return Stopped
+	}
+	daemonProcess, err := os.FindProcess(d.cmd.Process.Pid)
+	if err != nil {
+		log.Println("Error finding daemon process:", err)
+		return Stopped
+	}
+	if daemonProcess == nil {
+		log.Println("Daemon process is nil")
+		return Stopped
+	}
+	if d.Status == Stopped {
+		log.Println("Daemon status is stopped but process is running")
+
+		// TODO: We need to somehow wait here until the process is stopped?!
+	}
+	log.Println("Daemon process is running, returning current status", d.Status)
+	return d.Status
+}
+
+func (s Status) String() string {
+	switch s {
+	case Stopped:
+		return "Stopped"
+	case Starting:
+		return "Starting"
+	case Running:
+		return "Running"
+	default:
+		return "Unknown"
+	}
 }
 
 func handleOutput(d *Daemon, cmdReader io.ReadCloser) {

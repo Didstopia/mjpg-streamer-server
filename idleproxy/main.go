@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"didstopia/jpg-streamer-server/idleproxy/conwatch"
-	"didstopia/jpg-streamer-server/idleproxy/daemon"
+	"didstopia/mjpg-streamer-server/idleproxy/conwatch"
+	"didstopia/mjpg-streamer-server/idleproxy/daemon"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -62,12 +62,8 @@ func loadOptions() {
 		log.Fatalf("Invalid idle timeout: %s", err)
 	}
 	options.IdleTimeout = idleTimeoutDuration
-	// FIXME: Remove this after moving to env vars etc.
-	options.IdleTimeout = time.Second * 15
 
 	options.Debug = strings.ToLower(getEnv("DEBUG", "false")) == "true"
-	// FIXME: Remove this after moving to env vars etc.
-	options.Debug = true
 	if options.Debug {
 		log.Printf("Options: %+v", options)
 	}
@@ -107,7 +103,7 @@ func setupProxy(ctx context.Context) {
 		// WriteTimeout:      10 * time.Second,
 		IdleTimeout: options.IdleTimeout,
 		// IdleTimeout: 30 * time.Second,
-		// ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	// log.Println("Idle timeout:", proxy.IdleTimeout)
 
@@ -129,8 +125,7 @@ func proxyHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func getProxyURL() string {
-	// FIXME: Use a more generic env var name, such as "server port", also "proxy port" instead of just "port"?
-	url := "http://localhost:" + getEnv("MJPG_STREAMER_PORT", "8080")
+	url := getEnv("MJPG_STREAMER_HOST", "http://localhost") + ":" + getEnv("MJPG_STREAMER_PORT", "8080")
 
 	// TODO: I wonder if we should always try to start the process here,
 	//       but also how would that work in tandem with the idle timer?
@@ -139,7 +134,7 @@ func getProxyURL() string {
 	if process.Status != daemon.Running {
 		// FIXME: This might cause issues with Octolapse, since it uses snapshots?
 		//        Maybe if we just increase the idle timeout to several minutes?
-		time.Sleep(time.Second * 150)
+		time.Sleep(time.Millisecond * 250)
 	}
 
 	// Query the URL to confirm it's up
