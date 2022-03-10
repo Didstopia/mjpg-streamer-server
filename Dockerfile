@@ -27,7 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg8-dev \
     gcc \
     g++ \
-    make
+    make \
+    v4l-utils
 
 # Download and install mjpg-streamer
 RUN curl -fsSLO --compressed --retry 3 --retry-delay 10 \

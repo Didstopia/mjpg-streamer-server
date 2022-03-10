@@ -1,0 +1,205 @@
+## TODO: Create an alias for "v4l2-ctl" in the OctoPrint Docker image,
+##       which will just relay the command via SSH -> Unraid -> mjpg-streamer-server container -> v4l2-ctl
+
+
+
+# We use the input_uvc plugin, documentation for it can be found here:
+# https://github.com/jacksonliam/mjpg-streamer/tree/master/mjpg-streamer-experimental/plugins/input_uvc
+
+## TODO: Extend the mjpg-streamer to support all available C920 settings!
+##       See this PR/diff for an example with the RaspiCam:
+##       https://github.com/jacksonliam/mjpg-streamer/pull/312/files#diff-69af22d5702dcb9af51807b32ca50431e6adcfd6bb21f43eba0d0a25dc69d1b2
+
+## TODO: Check all the open PRs for any potential work on what we need:
+##       https://github.com/jacksonliam/mjpg-streamer/pulls
+
+## TODO: Fork and fix OctoPrint-CameraSettings plugin in a similar fashion:
+##       https://github.com/The-EG/OctoPrint-CameraSettings
+##       https://github.com/The-EG/OctoPrint-CameraSettings/blob/main/docs/setup.md
+
+
+
+root@859819fdcb74:/mjpg/mjpg-streamer-master/mjpg-streamer-experimental# v4l2-ctl -D
+Driver Info:
+        Driver name      : uvcvideo
+        Card type        : HD Pro Webcam C920
+        Bus info         : usb-0000:04:00.0-2
+        Driver version   : 5.14.15
+        Capabilities     : 0x84a00001
+                Video Capture
+                Metadata Capture
+                Streaming
+                Extended Pix Format
+                Device Capabilities
+        Device Caps      : 0x04200001
+                Video Capture
+                Streaming
+                Extended Pix Format
+Media Driver Info:
+        Driver name      : uvcvideo
+        Model            : HD Pro Webcam C920
+        Serial           : 7FCE7D9F
+        Bus info         : usb-0000:04:00.0-2
+        Media version    : 5.14.15
+        Hardware revision: 0x00000021 (33)
+        Driver version   : 5.14.15
+Interface Info:
+        ID               : 0x03000002
+        Type             : V4L Video
+Entity Info:
+        ID               : 0x00000001 (1)
+        Name             : HD Pro Webcam C920
+        Function         : V4L2 I/O
+        Flags         : default
+        Pad 0x01000007   : 0: Sink
+          Link 0x0200001f: from remote pad 0x100000a of entity 'Processing 3': Data, Enabled, Immutable
+
+
+
+root@859819fdcb74:/mjpg/mjpg-streamer-master/mjpg-streamer-experimental# v4l2-ctl --all
+Driver Info:
+        Driver name      : uvcvideo
+        Card type        : HD Pro Webcam C920
+        Bus info         : usb-0000:04:00.0-2
+        Driver version   : 5.14.15
+        Capabilities     : 0x84a00001
+                Video Capture
+                Metadata Capture
+                Streaming
+                Extended Pix Format
+                Device Capabilities
+        Device Caps      : 0x04200001
+                Video Capture
+                Streaming
+                Extended Pix Format
+Media Driver Info:
+        Driver name      : uvcvideo
+        Model            : HD Pro Webcam C920
+        Serial           : 7FCE7D9F
+        Bus info         : usb-0000:04:00.0-2
+        Media version    : 5.14.15
+        Hardware revision: 0x00000021 (33)
+        Driver version   : 5.14.15
+Interface Info:
+        ID               : 0x03000002
+        Type             : V4L Video
+Entity Info:
+        ID               : 0x00000001 (1)
+        Name             : HD Pro Webcam C920
+        Function         : V4L2 I/O
+        Flags         : default
+        Pad 0x01000007   : 0: Sink
+          Link 0x0200001f: from remote pad 0x100000a of entity 'Processing 3': Data, Enabled, Immutable
+Priority: 2
+Video input : 0 (Camera 1: ok)
+Format Video Capture:
+        Width/Height      : 1920/1080
+        Pixel Format      : 'MJPG' (Motion-JPEG)
+        Field             : None
+        Bytes per Line    : 0
+        Size Image        : 4147200
+        Colorspace        : sRGB
+        Transfer Function : Rec. 709
+        YCbCr/HSV Encoding: ITU-R 601
+        Quantization      : Default (maps to Full Range)
+        Flags             : 
+Crop Capability Video Capture:
+        Bounds      : Left 0, Top 0, Width 1920, Height 1080
+        Default     : Left 0, Top 0, Width 1920, Height 1080
+        Pixel Aspect: 1/1
+Selection Video Capture: crop_default, Left 0, Top 0, Width 1920, Height 1080, Flags: 
+Selection Video Capture: crop_bounds, Left 0, Top 0, Width 1920, Height 1080, Flags: 
+Streaming Parameters Video Capture:
+        Capabilities     : timeperframe
+        Frames per second: 30.000 (30/1)
+        Read buffers     : 0
+                     brightness 0x00980900 (int)    : min=0 max=255 step=1 default=128 value=128
+                       contrast 0x00980901 (int)    : min=0 max=255 step=1 default=128 value=128
+                     saturation 0x00980902 (int)    : min=0 max=255 step=1 default=128 value=128
+ white_balance_temperature_auto 0x0098090c (bool)   : default=1 value=1
+                           gain 0x00980913 (int)    : min=0 max=255 step=1 default=0 value=0
+           power_line_frequency 0x00980918 (menu)   : min=0 max=2 default=2 value=2
+                                0: Disabled
+                                1: 50 Hz
+                                2: 60 Hz
+      white_balance_temperature 0x0098091a (int)    : min=2000 max=6500 step=1 default=4000 value=4439 flags=inactive
+                      sharpness 0x0098091b (int)    : min=0 max=255 step=1 default=128 value=128
+         backlight_compensation 0x0098091c (int)    : min=0 max=1 step=1 default=0 value=0
+                  exposure_auto 0x009a0901 (menu)   : min=0 max=3 default=3 value=3
+                                1: Manual Mode
+                                3: Aperture Priority Mode
+              exposure_absolute 0x009a0902 (int)    : min=3 max=2047 step=1 default=250 value=333 flags=inactive
+         exposure_auto_priority 0x009a0903 (bool)   : default=0 value=0
+                   pan_absolute 0x009a0908 (int)    : min=-36000 max=36000 step=3600 default=0 value=0
+                  tilt_absolute 0x009a0909 (int)    : min=-36000 max=36000 step=3600 default=0 value=0
+                 focus_absolute 0x009a090a (int)    : min=0 max=250 step=5 default=0 value=65 flags=inactive
+                     focus_auto 0x009a090c (bool)   : default=1 value=1
+                  zoom_absolute 0x009a090d (int)    : min=100 max=500 step=1 default=100 value=100
+
+
+
+root@859819fdcb74:/mjpg/mjpg-streamer-master/mjpg-streamer-experimental# v4l2-ctl -l        
+                     brightness 0x00980900 (int)    : min=0 max=255 step=1 default=128 value=128
+                       contrast 0x00980901 (int)    : min=0 max=255 step=1 default=128 value=128
+                     saturation 0x00980902 (int)    : min=0 max=255 step=1 default=128 value=128
+ white_balance_temperature_auto 0x0098090c (bool)   : default=1 value=1
+                           gain 0x00980913 (int)    : min=0 max=255 step=1 default=0 value=0
+           power_line_frequency 0x00980918 (menu)   : min=0 max=2 default=2 value=2
+      white_balance_temperature 0x0098091a (int)    : min=2000 max=6500 step=1 default=4000 value=4557 flags=inactive
+                      sharpness 0x0098091b (int)    : min=0 max=255 step=1 default=128 value=128
+         backlight_compensation 0x0098091c (int)    : min=0 max=1 step=1 default=0 value=0
+                  exposure_auto 0x009a0901 (menu)   : min=0 max=3 default=3 value=3
+              exposure_absolute 0x009a0902 (int)    : min=3 max=2047 step=1 default=250 value=333 flags=inactive
+         exposure_auto_priority 0x009a0903 (bool)   : default=0 value=0
+                   pan_absolute 0x009a0908 (int)    : min=-36000 max=36000 step=3600 default=0 value=0
+                  tilt_absolute 0x009a0909 (int)    : min=-36000 max=36000 step=3600 default=0 value=0
+                 focus_absolute 0x009a090a (int)    : min=0 max=250 step=5 default=0 value=65 flags=inactive
+                     focus_auto 0x009a090c (bool)   : default=1 value=1
+                  zoom_absolute 0x009a090d (int)    : min=100 max=500 step=1 default=100 value=100
+
+
+
+# Disable auto-focus
+v4l2-ctl --set-ctrl focus_auto=0
+
+# Set manual focus (0-250, default 65)
+v4l2-ctl --set-ctrl focus_absolute=60
+
+# Disable auto-exposure
+# NOTE: Only 1 and 3 seem like valid options
+v4l2-ctl --set-ctrl exposure_auto=1
+
+# Set manual exposure (in microseconds, 3-2047, default 333)
+v4l2-ctl --set-ctrl exposure_absolute=260
+
+# Disable auto-white balance temperature
+v4l2-ctl --set-ctrl white_balance_temperature_auto=0
+
+# Set manual white balance temperature
+# NOTE: This seems to control how blue or green the image is
+v4l2-ctl --set-ctrl white_balance_temperature=4000
+
+## TODO: Test if this even does anything? Doesn't look like it so far?
+# Enable backlight compensation
+v4l2-ctl --set-ctrl backlight_compensation=1
+
+## TODO: Increase this while reducing brightness/contrast/saturation
+# Override gain (0-255, default 0)
+# NOTE: Controls the amount of light the camera is exposed to
+v4l2-ctl --set-ctrl gain=185
+
+# Override brightness (0-255, default 128)
+# NOTE: Bigger number means brighter image
+v4l2-ctl --set-ctrl brightness=140
+
+# Override contrast (0-255, default 128)
+# NOTE: Bigger number means lower contrast
+v4l2-ctl --set-ctrl contrast=150
+
+# Override saturation (0-255, default 128)
+# NOTE: Lower number means more saturated (grayscale) image
+v4l2-ctl --set-ctrl saturation=185
+
+# Override sharpness (0-255, default 128)
+# NOTE: Bigger number means sharper image (think crisper edges etc.)
+v4l2-ctl --set-ctrl sharpness=150
