@@ -153,13 +153,20 @@ func (d *Daemon) Stop() error {
 		return errors.New("unable to stop daemon, already stopped")
 	}
 
-	// Kill the process
-	// if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
-	if err := d.cmd.Process.Kill(); err != nil {
-		// Ignore the error if the process is already dead
-		if err.Error() != "os: process already finished" {
-			log.Println("Error stopping daemon:", err)
-			return err
+	// Attempt to gracefully stop the process and fallback to a force kill if it doesn't stop
+	if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
+		log.Println("Error stopping daemon:", err)
+		// return err
+
+		// Kill the process
+		// if err := d.cmd.Process.Signal(os.Interrupt); err != nil {
+		log.Println("Daemon is still running, killing it ...")
+		if err := d.cmd.Process.Kill(); err != nil {
+			// Ignore the error if the process is already dead
+			if err.Error() != "os: process already finished" {
+				log.Println("Error stopping daemon:", err)
+				return err
+			}
 		}
 	}
 
@@ -293,10 +300,10 @@ func handleOutput(d *Daemon, output io.ReadCloser, isErrorOutput bool) {
 
 					if isErrorOutput {
 						// Print the output as an error
-						log.Println("[DAEMON ERROR]", outputMessage)
+						log.Println("[DAEMON STDERR]", outputMessage)
 					} else {
 						// Print the output as normal output
-						log.Println("[DAEMON]", outputMessage)
+						log.Println("[DAEMON STDOUT]", outputMessage)
 					}
 				}
 
