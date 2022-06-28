@@ -62,16 +62,28 @@ func (d *Daemon) Start() error {
 	d.cmd = exec.Command("/bin/bash", "-c", d.Cmd)
 	d.cmd.Dir = d.Cwd
 
-	cmdReader, cmdReaderErr := d.cmd.StdoutPipe()
-	if cmdReaderErr != nil {
-		log.Printf("Error getting daemon stdout pipe: %s", cmdReaderErr)
+	// Attempt to open the process stdin and stderr pipes
+	stderr, err := d.cmd.StderrPipe()
+	if err != nil {
+		log.Printf("Error getting daemon stdout pipe: %s", err)
 		d.Status = Stopped
-		return cmdReaderErr
+		return err
 	}
-	go handleOutput(d, cmdReader)
+	stdout, err := d.cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Error getting daemon stdout pipe: %s", err)
+		d.Status = Stopped
+		return err
+	}
 
+	// TODO: Only show stdout if DEBUG mode is enabled?!
+	// Handle the process's stdin and stderr pipes in separate goroutines
+	go handleOutput(d, stdout, false)
+	go handleOutput(d, stderr, true)
+
+	// Attempt to start the process
 	if err := d.cmd.Start(); err != nil {
-		log.Println("Error start daemon:", err)
+		log.Println("Error starting daemon:", err)
 		d.Status = Stopped
 		return err
 	}
@@ -230,40 +242,65 @@ func (s Status) String() string {
 	}
 }
 
-func handleOutput(d *Daemon, cmdReader io.ReadCloser) {
-	// defer d.Stop()
+func handleOutput(d *Daemon, output io.ReadCloser, isErrorOutput bool) {
+	// Create a new scanner for the output
+	scanner := bufio.NewScanner(output)
 
-	scanner := bufio.NewScanner(cmdReader)
-
+	// Start processing the output
 	for {
 		select {
+		// Handle context cancellation
 		case <-d.Context.Done():
-			log.Println("Context done, stopping daemon output handler")
+			if isErrorOutput {
+				log.Println("Context done, stopping daemon error output handler")
+			} else {
+				log.Println("Context done, stopping daemon output handler")
+			}
 			return
+		// Handle new output data
 		default:
-			// Bail out if the process is not running
+			// Bail out early if the process is no longer running
 			if d.Status == Stopped {
 				log.Println("Stopping daemon output handler, daemon is stopped")
+				if isErrorOutput {
+					log.Println("Stopping daemon error output handler, daemon is stopped")
+				} else {
+					log.Println("Stopping daemon normal output handler, daemon is stopped")
+				}
 				return
 			}
 
-			// Print the process output as long as it is running
+			// Print the process output as long as it is still running
 			if d.Status == Running {
+				// Scan for the next chunk of output
 				for scanner.Scan() {
-					log.Println(scanner.Text())
+					// Get the next chunk of output as a text string
+					outputMessage := scanner.Text()
+
+					if isErrorOutput {
+						// Print the output as an error
+						log.Println("[DAEMON ERROR]", outputMessage)
+					} else {
+						// Print the output as normal output
+						log.Println("[DAEMON]", outputMessage)
+					}
 				}
 
-				// If the process is not running, stop the handler
+				// Handler errors produced by the scanner
 				if err := scanner.Err(); err != nil {
 					// Ignore the error if the process is already dead
 					if err.Error() != "read |0: file already closed" {
 						log.Println("Error reading daemon output:", err)
 						d.Stop()
 					}
-					log.Println("Stopping daemon output handler, daemon is stopped")
+					if isErrorOutput {
+						log.Println("Stopping daemon error output handler, scanner returned an error")
+					} else {
+						log.Println("Stopping daemon normal output handler, scanner returned an error")
+					}
 					return
 				}
-			}
+			} // Otherwise we're still waiting for the process to start
 		}
 	}
 }

@@ -54,6 +54,9 @@ var (
 func loadOptions() {
 	options = Options{}
 
+	// FIXME: Parse CLI args as options, as we aren't parsing those at all right now?!
+	// TODO: Fallback to environment variable overrides, when CLI args are not set!
+
 	options.Host = getEnv("HOST", "http://localhost")
 	options.Port = getEnv("PORT", "80")
 	options.ProxyURL = getEnv("PROXY_URL", "http://localhost:8080")
@@ -73,6 +76,8 @@ func loadOptions() {
 	options.ProcessCWD = getEnv("PROCESS_CWD", ".")
 	options.ProcessCMD = getEnv("PROCESS_CMD", "")
 
+	// FIXME: Use better loggign that supports setting log levels etc.
+	//        and ensure that toggling DEBUG only logs the appropriate messages!
 	options.Debug = strings.ToLower(getEnv("DEBUG", "false")) == "true"
 	if options.Debug {
 		log.Printf("Options: %+v", options)

@@ -12,4 +12,11 @@ services:
       MJPG_STREAMER_PORT: "8080"
       MJPG_STREAMER_CAMERA_DEVICE: ""
       IDLE_TIMEOUT: "15s"
-      DEBUG: "true"
+      # IDLEPROXY_PROCESS_CMD: "echo 'HELLO WORLD'"
+      # IDLEPROXY_PROCESS_CMD: ">&2 echo 'HELLO WORLD'"
+      IDLEPROXY_DEBUG: "true"
+    # Limit to 50% of a single CPU core
+    cpus: 0.5
+    # Limit to 64-128MB of memory
+    mem_limit: 128m
+    mem_reservation: 64m
