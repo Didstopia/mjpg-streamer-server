@@ -42,11 +42,19 @@ RUN make install
 # Copy the idleproxy binary
 COPY --from=go-builder /go/bin/idleproxy /go/bin/idleproxy
 
-# Set default environment variables
+# Set default environment variables for mjpg-streamer
 ENV MJPG_STREAMER_INPUT "input_uvc.so"
-ENV MJPG_STREAMER_HOST "http://localhost"
 ENV MJPG_STREAMER_PORT "8080"
 ENV MJPG_STREAMER_CAMERA_DEVICE "/dev/video0"
+
+# Set default environment variables for idleproxy
+ENV IDLEPROXY_HOST "http://localhost"
+ENV IDLEPROXY_PORT "80"
+ENV IDLEPROXY_PROXY_URL "http://localhost:8080"
+ENV IDLEPROXY_IDLE_TIMEOUT "1m"
+ENV IDLEPROXY_PROCESS_CWD "/mjpg/mjpg-streamer-master/mjpg-streamer-experimental"
+ENV IDLEPROXY_PROCESS_CMD "/entry"
+ENV IDLEPROXY_DEBUG "false"
 
 # Expose the default ports
 EXPOSE 80
