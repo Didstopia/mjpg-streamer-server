@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"time"
 )
 
 // Status enum type for running or stopped process
@@ -32,16 +33,18 @@ type Daemon struct {
 	// Command for running the process
 	Cmd string
 	// Status of the process
-	Status Status
-	cmd    *exec.Cmd
+	Status     Status
+	cmd        *exec.Cmd
+	StartDelay time.Duration
 }
 
 // Return a new daemon
 func NewDaemon(cwd, cmd string) *Daemon {
 	return &Daemon{
-		Cwd:    cwd,
-		Cmd:    cmd,
-		Status: Stopped,
+		Cwd:        cwd,
+		Cmd:        cmd,
+		Status:     Stopped,
+		StartDelay: 0,
 	}
 }
 
@@ -101,6 +104,12 @@ func (d *Daemon) Start() error {
 	// 	log.Println("Waiting for daemon to start, current status:", d.Status)
 	// 	time.Sleep(time.Second)
 	// }
+
+	// Apply a startup delay if enabled
+	if d.StartDelay > 0 {
+		log.Printf("Delaying daemon post-startup by %f seconds ...", d.StartDelay.Seconds())
+		time.Sleep(d.StartDelay)
+	}
 
 	d.Status = Running
 	return nil

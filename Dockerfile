@@ -57,6 +57,7 @@ ENV IDLEPROXY_PROXY_URL "http://localhost:8080"
 ENV IDLEPROXY_IDLE_TIMEOUT "1m"
 ENV IDLEPROXY_PROCESS_CWD "/mjpg/mjpg-streamer-master/mjpg-streamer-experimental"
 ENV IDLEPROXY_PROCESS_CMD "/entry"
+ENV IDLEPROXY_PROCESS_START_DELAY "2s"
 ENV IDLEPROXY_DEBUG "false"
 
 # Expose the default ports
