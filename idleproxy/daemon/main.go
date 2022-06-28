@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 )
 
 // Status enum type for running or stopped process
@@ -57,9 +58,13 @@ func (d *Daemon) Start() error {
 
 	d.Status = Starting
 
-	// FIXME: Figure out the default shell instead, so this works across
-	//        different platforms, such as Linux, macOS and Windows
-	d.cmd = exec.Command("/bin/bash", "-c", d.Cmd)
+	// Create a new command and launch it using the default shell for the current platform
+	// d.cmd = exec.Command("/bin/bash", "-c", d.Cmd)
+	if runtime.GOOS == "windows" {
+		d.cmd = exec.Command("cmd", "/c", d.Cmd)
+	} else {
+		d.cmd = exec.Command("/bin/sh", "-c", d.Cmd)
+	}
 	d.cmd.Dir = d.Cwd
 
 	// Attempt to open the process stdin and stderr pipes
