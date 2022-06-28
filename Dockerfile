@@ -1,3 +1,5 @@
+## FIXME: Switch all of these to utilize Alpine + didstopia/idleproxy:latest + build idleproxy image as a dependency, somehow?!
+
 # Compiler image
 FROM golang:1.17-bullseye AS go-builder
 
