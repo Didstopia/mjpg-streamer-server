@@ -1,3 +1,3 @@
-module didstopia/mjpg-streamer-server/idleproxy
+module github.com/didstopia/mjpg-streamer-server/idleproxy
 
-go 1.17
+go 1.18

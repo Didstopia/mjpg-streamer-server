@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"didstopia/mjpg-streamer-server/idleproxy/conwatch"
-	"didstopia/mjpg-streamer-server/idleproxy/daemon"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -13,6 +11,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/didstopia/mjpg-streamer-server/idleproxy/conwatch"
+	"github.com/didstopia/mjpg-streamer-server/idleproxy/daemon"
 )
 
 // TODO: Research the following:
@@ -27,9 +28,13 @@ import (
 
 // Options for the idle proxy
 type Options struct {
-	Port string `long:"port" description:"Port to listen on" default:"80"`
+	Host     string `long:"host" description:"Hostname to listen on" default:"http://localhost"`
+	Port     string `long:"port" description:"Port to listen on" default:"80"`
+	ProxyURL string `long:"proxy-url" description:"URL of the proxy to use" default:"http://localhost:8080"`
 	// IdleTimer   time.Duration `long:"idle-timer" description:"Idle timer interval" default:"1s"`
 	IdleTimeout time.Duration `long:"idle-timeout" description:"Idle connection timeout" default:"1m"`
+	ProcessCWD  string        `long:"process-cwd" description:"Working directory for the spawned proxied process" default:"."`
+	ProcessCMD  string        `long:"process-cmd" description:"Command to spawn the proxied process with" default:""`
 	Debug       bool          `long:"debug" description:"Enable debug mode"`
 }
 
@@ -49,7 +54,9 @@ var (
 func loadOptions() {
 	options = Options{}
 
+	options.Host = getEnv("HOST", "http://localhost")
 	options.Port = getEnv("PORT", "80")
+	options.ProxyURL = getEnv("PROXY_URL", "http://localhost:8080")
 
 	// idleTimerDuration, err := time.ParseDuration(getEnv("IDLE_TIMER", "1s"))
 	// if err != nil {
@@ -62,6 +69,9 @@ func loadOptions() {
 		log.Fatalf("Invalid idle timeout: %s", err)
 	}
 	options.IdleTimeout = idleTimeoutDuration
+
+	options.ProcessCWD = getEnv("PROCESS_CWD", ".")
+	options.ProcessCMD = getEnv("PROCESS_CMD", "")
 
 	options.Debug = strings.ToLower(getEnv("DEBUG", "false")) == "true"
 	if options.Debug {
@@ -125,19 +135,23 @@ func proxyHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func getProxyURL() string {
-	url := getEnv("MJPG_STREAMER_HOST", "http://localhost") + ":" + getEnv("MJPG_STREAMER_PORT", "8080")
+	url := options.ProxyURL
 
 	// TODO: I wonder if we should always try to start the process here,
 	//       but also how would that work in tandem with the idle timer?
 	// FIXME: The idle timer should be handling the process startup, right?
-	// Sleep for a bit to give the process time to start up
-	if process.Status != daemon.Running {
-		// FIXME: This might cause issues with Octolapse, since it uses snapshots?
-		//        Maybe if we just increase the idle timeout to several minutes?
-		if options.Debug {
-			log.Println("Daemon is not running, sleeping for a bit before checking again...")
+
+	// Handle the daemon process's health checking etc.
+	if process != nil {
+		// Sleep for a bit to give the process time to start up
+		if process.Status != daemon.Running {
+			// FIXME: This might cause issues with Octolapse, since it uses snapshots?
+			//        Maybe if we just increase the idle timeout to several minutes?
+			if options.Debug {
+				log.Println("Daemon is not running, sleeping for a bit before checking again...")
+			}
+			time.Sleep(time.Millisecond * 250)
 		}
-		time.Sleep(time.Millisecond * 250)
 	}
 
 	// Query the URL to confirm it's up
@@ -183,12 +197,17 @@ func serveReverseProxy(target string, res http.ResponseWriter, req *http.Request
 }
 
 func setupDaemon(ctx context.Context) {
+	if options.ProcessCMD == "" {
+		log.Print("Skipping daemon setup, no process command specified...")
+		return
+	}
+
 	log.Print("Setting up daemon...")
 
 	process = &daemon.Daemon{
 		Context: ctx,
-		Cwd:     "/mjpg/mjpg-streamer-master/mjpg-streamer-experimental",
-		Cmd:     "/entry",
+		Cwd:     options.ProcessCWD,
+		Cmd:     options.ProcessCMD,
 	}
 
 	if err := process.Start(); err != nil {
@@ -213,26 +232,29 @@ func setupIdleTimer(ctx context.Context) {
 				connectionCount = newConnectionCount
 			}
 
-			// Ensure the daemon is stopped if there are no active connections
-			if newConnectionCount == 0 {
-				if process.Status == daemon.Running {
-					if options.Debug {
-						log.Print("No active connections and daemon is running, stopping...")
-					}
-					if err := process.Stop(); err != nil {
-						log.Fatalf("Error stopping daemon: %s", err)
+			// Handle the daemon process lifecycle events
+			if process != nil {
+				// Ensure the daemon is stopped if there are no active connections
+				if newConnectionCount == 0 {
+					if process.Status == daemon.Running {
+						if options.Debug {
+							log.Print("No active connections and daemon is running, stopping...")
+						}
+						if err := process.Stop(); err != nil {
+							log.Fatalf("Error stopping daemon: %s", err)
+						}
 					}
 				}
-			}
 
-			// Ensure the daemon is running if there are active connections
-			if newConnectionCount > 0 {
-				if process.Status == daemon.Stopped {
-					if options.Debug {
-						log.Print("Active connections detected and daemon is not running, starting...")
-					}
-					if err := process.Start(); err != nil {
-						log.Fatalf("Error starting daemon: %s", err)
+				// Ensure the daemon is running if there are active connections
+				if newConnectionCount > 0 {
+					if process.Status == daemon.Stopped {
+						if options.Debug {
+							log.Print("Active connections detected and daemon is not running, starting...")
+						}
+						if err := process.Start(); err != nil {
+							log.Fatalf("Error starting daemon: %s", err)
+						}
 					}
 				}
 			}
@@ -246,7 +268,7 @@ func setupIdleTimer(ctx context.Context) {
 }
 
 func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok && len(value) > 0 {
+	if value, ok := os.LookupEnv("IDLEPROXY_" + key); ok && len(value) > 0 {
 		return value
 	}
 	return fallback
@@ -263,10 +285,13 @@ func shutdown(ctx context.Context, ctxCancel context.CancelFunc) {
 	// log.Println("Shutting down idle timer...")
 	// idleTimer.Stop()
 
-	log.Println("Shutting down daemon...")
-	if err := process.Stop(); err != nil {
-		log.Println("Error stopping daemon:", err)
-		exitCode = 1
+	// Shutdown the daemon process if it's running/enabled
+	if process != nil {
+		log.Println("Shutting down daemon...")
+		if err := process.Stop(); err != nil {
+			log.Println("Error stopping daemon:", err)
+			exitCode = 1
+		}
 	}
 
 	log.Println("Shutting down proxy...")

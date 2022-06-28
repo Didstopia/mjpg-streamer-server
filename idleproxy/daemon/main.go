@@ -57,7 +57,8 @@ func (d *Daemon) Start() error {
 
 	d.Status = Starting
 
-	// cmd = exec.Command(d.Cmd)
+	// FIXME: Figure out the default shell instead, so this works across
+	//        different platforms, such as Linux, macOS and Windows
 	d.cmd = exec.Command("/bin/bash", "-c", d.Cmd)
 	d.cmd.Dir = d.Cwd
 
